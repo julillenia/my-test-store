@@ -1,3 +1,6 @@
+{%comment %}
+  This is theme file. I added the SKU -> product finding code.
+{% endcomment %}
 <!doctype html>
 <html
   class="no-js{% if request.design_mode %} shopify-design-mode{% endif %}"
@@ -8,9 +11,7 @@
     <script src="https://cdn.jsdelivr.net/npm/swiper@10/swiper-bundle.min.js"></script>
     
     <script>
-// Blog Product Shortcode Parser
 document.addEventListener('DOMContentLoaded', async () => {
-  // Find blog content - try multiple selectors
   const contentElement = document.querySelector('.blog-post-content') || 
                          document.querySelector('rte-formatter') ||
                          document.querySelector('article .rte') ||
@@ -21,7 +22,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     return;
   }
 
-  // Find all shortcodes in the content
   const shortcodeRegex = /\[product="([^"]+)"\]/g;
   const content = contentElement.textContent || contentElement.innerText || '';
   const matches = [...content.matchAll(shortcodeRegex)];
@@ -30,17 +30,14 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   console.log('Found', matches.length, 'product shortcode(s)');
 
-  // Process each shortcode
   for (const match of matches) {
     const fullMatch = match[0];
-    const identifier = match[1]; // SKU, Handle, or ID
+    const identifier = match[1];
     
-    // Create placeholder
     const placeholder = document.createElement('div');
     placeholder.className = 'blog-product-placeholder';
     placeholder.innerHTML = '<div style="padding: 1rem; text-align: center; color: #666;">⏳ Produkt wird geladen...</div>';
     
-    // Replace shortcode text with placeholder
     const textNodes = [];
     const walker = document.createTreeWalker(
       contentElement,
@@ -56,7 +53,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     }
     
-    // Replace first occurrence
     if (textNodes.length > 0) {
       const textNode = textNodes[0];
       const parent = textNode.parentNode;
@@ -76,7 +72,6 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
     }
 
-    // Fetch and display product
     try {
       await loadProductCard(identifier, placeholder);
     } catch (error) {
@@ -92,7 +87,6 @@ async function loadProductCard(identifier, placeholder) {
   console.log('🔍 Searching for product:', identifier);
   let productHandle = null;
   
-  // Strategy 1: Try direct product search (best for SKUs)
   try {
     const searchUrl = `/search?q=${encodeURIComponent(identifier)}&type=product`;
     console.log('🔍 Trying search URL:', searchUrl);
@@ -103,11 +97,9 @@ async function loadProductCard(identifier, placeholder) {
       const parser = new DOMParser();
       const doc = parser.parseFromString(html, 'text/html');
       
-      // Find product links in search results
       const productLinks = doc.querySelectorAll('a[href*="/products/"]');
       console.log('🔍 Found', productLinks.length, 'product links in search');
       
-      // Check each product for matching SKU
       for (const link of productLinks) {
         const href = link.getAttribute('href');
         const handle = href.match(/\/products\/([^?#]+)/)?.[1];
@@ -120,7 +112,6 @@ async function loadProductCard(identifier, placeholder) {
               const product = await productResponse.json();
               console.log('📦 Product data:', product.title, 'Variants:', product.variants?.length);
               
-              // Check if any variant has this SKU
               if (product.variants) {
                 const matchingVariant = product.variants.find(v => v.sku === identifier);
                 if (matchingVariant) {
@@ -140,7 +131,6 @@ async function loadProductCard(identifier, placeholder) {
     console.warn('⚠️ Search failed:', error);
   }
   
-  // Strategy 2: Try search suggest API
   if (!productHandle) {
     try {
       const suggestUrl = `/search/suggest.json?q=${encodeURIComponent(identifier)}&resources[type]=product&resources[limit]=10`;
@@ -176,7 +166,6 @@ async function loadProductCard(identifier, placeholder) {
     }
   }
   
-  // Strategy 3: Try as product handle directly
   if (!productHandle && /^[a-z0-9-]+$/i.test(identifier)) {
     const testUrl = `/products/${identifier.toLowerCase()}?section_id=blog-product-card-section`;
     console.log('🔍 Trying as handle:', testUrl);
@@ -198,7 +187,6 @@ async function loadProductCard(identifier, placeholder) {
   
   console.log('✅ Using product handle:', productHandle);
   
-  // Fetch product card HTML
   const productUrl = `/products/${productHandle}?section_id=blog-product-card-section`;
   console.log('📥 Fetching product card from:', productUrl);
   const response = await fetch(productUrl);
@@ -214,7 +202,6 @@ async function loadProductCard(identifier, placeholder) {
   const parser = new DOMParser();
   const doc = parser.parseFromString(html, 'text/html');
   
-  // Try multiple selectors to find the product card
   let productCard = doc.querySelector('.blog-product-card') ||
                     doc.querySelector('.blog-product-card-wrapper') ||
                     doc.querySelector('[class*="product-card"]') ||
@@ -229,7 +216,6 @@ async function loadProductCard(identifier, placeholder) {
   if (productCard && (productCard.classList.contains('blog-product-card') || productCard.querySelector('.blog-product-card'))) {
     console.log('✅ Product card found, displaying...');
     
-    // If we got a wrapper, extract the inner card
     if (productCard.classList.contains('blog-product-card-wrapper')) {
       const innerCard = productCard.querySelector('.blog-product-card');
       if (innerCard) {
@@ -244,7 +230,6 @@ async function loadProductCard(identifier, placeholder) {
     console.error('❌ Product card element not found in response');
     console.log('Available elements:', Array.from(doc.querySelectorAll('*')).map(el => el.className).filter(c => c));
     
-    // Fallback: create a simple product card
     try {
       const productData = await fetch(`/products/${productHandle}.js`).then(r => r.json());
       placeholder.innerHTML = `
@@ -275,7 +260,6 @@ async function loadProductCard(identifier, placeholder) {
       >
     {%- endif -%}
 
-    {% comment %} This a way to wait for main content to load when navigating to a new page so that the view transitions can work consistently {% endcomment %}
     <link
       rel="expect"
       href="#MainContent"
