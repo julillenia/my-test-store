@@ -1,0 +1,117 @@
+{%- doc -%}
+  Renders a product card for blog posts when [product="SKU"] is used
+{%- enddoc -%}
+
+{% if product and product != blank %}
+  <div class="blog-product-card" style="width: 390px;">
+    <a href="{{ product.url }}" class="blog-product-card__link">
+      {% if product.featured_media %}
+        <div class="blog-product-card__image">
+          <img
+            src="{{ product.featured_media | image_url: width: 300 }}"
+            alt="{{ product.featured_media.alt | escape }}"
+            width="300"
+            height="300"
+            loading="lazy"
+          >
+        </div>
+      {% endif %}
+      <div class="blog-product-card__content">
+        <h4 class="blog-product-card__title">{{ product.title }}</h4>
+        <div class="blog-product-card__price">
+          {% render 'price', product_resource: product %}
+        </div>
+        {% render 'add-to-blog-cart-button', id: product.id, product: product %}
+      </div>
+    </a>
+  </div>
+{% endif %}
+
+{% stylesheet %}
+  .blog-product-card {
+    width: 390px;
+    margin: 2rem 0;
+    border: 1px solid rgba(var(--color-foreground-rgb), 0.1);
+    border-radius: 8px;
+    overflow: hidden;
+    background: var(--color-background);
+    border: 1px solid #eeeeee;
+  }
+  .blog-product-card-style {}
+
+  .blog-product-card__link {
+    display: block;
+    width: 390px;
+    align-items: center;
+    gap: 1.5rem;
+    text-decoration: none;
+    color: inherit;
+    padding: 1rem;
+    transition: background-color 0.2s;
+  }
+
+  .blog-product-card__link:hover {
+    background-color: rgba(var(--color-foreground-rgb), 0.03);
+  }
+
+  .blog-product-card__image {
+    flex-shrink: 0;
+    width: 358px;
+    height: 358px;
+    border-radius: 4px;
+    overflow: hidden;
+    margin: auto;
+    margin: 0 0 20px;
+  }
+
+  .blog-product-card__image img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .blog-product-card__content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .blog-product-card__title {
+    font-family: 'Poppins';
+    font-style: normal;
+    font-weight: 400;
+    font-size: 15px;
+    line-height: 17px;
+    color: #000;
+    text-align: left;
+    margin: 0;
+    padding: 0;
+  }
+
+  .blog-product-card__price {
+    font-family: 'Poppins';
+    font-style: normal;
+    font-weight: 400;
+    font-size: 15px;
+    line-height: 14px;
+    color: #000;
+    text-align: left !important;
+    margin: 10px 0;
+    padding: 0;
+  }
+
+  @media screen and (max-width: 749px) {
+    .blog-product-card__link {
+      flex-direction: column;
+      text-align: center;
+    }
+
+    .blog-product-card__image {
+      width: 100%;
+      height: auto;
+      aspect-ratio: 1;
+    }
+  }
+{% endstylesheet %}
+

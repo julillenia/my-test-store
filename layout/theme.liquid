@@ -1,0 +1,339 @@
+<!doctype html>
+<html
+  class="no-js{% if request.design_mode %} shopify-design-mode{% endif %}"
+  lang="{{ request.locale.iso_code }}"
+>
+  <head>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swiper@10/swiper-bundle.min.css" />
+    <script src="https://cdn.jsdelivr.net/npm/swiper@10/swiper-bundle.min.js"></script>
+    
+    <script>
+// Blog Product Shortcode Parser
+document.addEventListener('DOMContentLoaded', async () => {
+  // Find blog content - try multiple selectors
+  const contentElement = document.querySelector('.blog-post-content') || 
+                         document.querySelector('rte-formatter') ||
+                         document.querySelector('article .rte') ||
+                         document.querySelector('article');
+  
+  if (!contentElement) {
+    console.log('Blog content not found');
+    return;
+  }
+
+  // Find all shortcodes in the content
+  const shortcodeRegex = /\[product="([^"]+)"\]/g;
+  const content = contentElement.textContent || contentElement.innerText || '';
+  const matches = [...content.matchAll(shortcodeRegex)];
+
+  if (matches.length === 0) return;
+
+  console.log('Found', matches.length, 'product shortcode(s)');
+
+  // Process each shortcode
+  for (const match of matches) {
+    const fullMatch = match[0];
+    const identifier = match[1]; // SKU, Handle, or ID
+    
+    // Create placeholder
+    const placeholder = document.createElement('div');
+    placeholder.className = 'blog-product-placeholder';
+    placeholder.innerHTML = '<div style="padding: 1rem; text-align: center; color: #666;">⏳ Produkt wird geladen...</div>';
+    
+    // Replace shortcode text with placeholder
+    const textNodes = [];
+    const walker = document.createTreeWalker(
+      contentElement,
+      NodeFilter.SHOW_TEXT,
+      null,
+      false
+    );
+    
+    let node;
+    while (node = walker.nextNode()) {
+      if (node.textContent.includes(fullMatch)) {
+        textNodes.push(node);
+      }
+    }
+    
+    // Replace first occurrence
+    if (textNodes.length > 0) {
+      const textNode = textNodes[0];
+      const parent = textNode.parentNode;
+      const text = textNode.textContent;
+      const index = text.indexOf(fullMatch);
+      
+      if (index !== -1) {
+        const beforeText = text.substring(0, index);
+        const afterText = text.substring(index + fullMatch.length);
+        
+        const fragment = document.createDocumentFragment();
+        if (beforeText) fragment.appendChild(document.createTextNode(beforeText));
+        fragment.appendChild(placeholder);
+        if (afterText) fragment.appendChild(document.createTextNode(afterText));
+        
+        parent.replaceChild(fragment, textNode);
+      }
+    }
+
+    // Fetch and display product
+    try {
+      await loadProductCard(identifier, placeholder);
+    } catch (error) {
+      console.error('Error loading product:', error);
+      placeholder.innerHTML = `<div style="padding: 1rem; border: 1px solid #ddd; border-radius: 4px; background: #f9f9f9;">
+        <p style="margin: 0; color: #666;">⚠️ Produkt konnte nicht geladen werden: <strong>${identifier}</strong></p>
+      </div>`;
+    }
+  }
+});
+
+async function loadProductCard(identifier, placeholder) {
+  console.log('🔍 Searching for product:', identifier);
+  let productHandle = null;
+  
+  // Strategy 1: Try direct product search (best for SKUs)
+  try {
+    const searchUrl = `/search?q=${encodeURIComponent(identifier)}&type=product`;
+    console.log('🔍 Trying search URL:', searchUrl);
+    const searchResponse = await fetch(searchUrl);
+    
+    if (searchResponse.ok) {
+      const html = await searchResponse.text();
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, 'text/html');
+      
+      // Find product links in search results
+      const productLinks = doc.querySelectorAll('a[href*="/products/"]');
+      console.log('🔍 Found', productLinks.length, 'product links in search');
+      
+      // Check each product for matching SKU
+      for (const link of productLinks) {
+        const href = link.getAttribute('href');
+        const handle = href.match(/\/products\/([^?#]+)/)?.[1];
+        
+        if (handle) {
+          console.log('🔍 Checking product:', handle);
+          try {
+            const productResponse = await fetch(`/products/${handle}.js`);
+            if (productResponse.ok) {
+              const product = await productResponse.json();
+              console.log('📦 Product data:', product.title, 'Variants:', product.variants?.length);
+              
+              // Check if any variant has this SKU
+              if (product.variants) {
+                const matchingVariant = product.variants.find(v => v.sku === identifier);
+                if (matchingVariant) {
+                  console.log('✅ Found matching SKU in product:', handle);
+                  productHandle = handle;
+                  break;
+                }
+              }
+            }
+          } catch (e) {
+            console.warn('⚠️ Error checking product', handle, e);
+          }
+        }
+      }
+    }
+  } catch (error) {
+    console.warn('⚠️ Search failed:', error);
+  }
+  
+  // Strategy 2: Try search suggest API
+  if (!productHandle) {
+    try {
+      const suggestUrl = `/search/suggest.json?q=${encodeURIComponent(identifier)}&resources[type]=product&resources[limit]=10`;
+      console.log('🔍 Trying suggest API:', suggestUrl);
+      const suggestResponse = await fetch(suggestUrl);
+      
+      if (suggestResponse.ok) {
+        const suggestData = await suggestResponse.json();
+        console.log('🔍 Suggest API response:', suggestData);
+        
+        if (suggestData.resources && suggestData.resources.results) {
+          for (const result of suggestData.resources.results) {
+            if (result.handle) {
+              try {
+                const productResponse = await fetch(`/products/${result.handle}.js`);
+                if (productResponse.ok) {
+                  const product = await productResponse.json();
+                  if (product.variants && product.variants.some(v => v.sku === identifier)) {
+                    console.log('✅ Found via suggest API:', result.handle);
+                    productHandle = result.handle;
+                    break;
+                  }
+                }
+              } catch (e) {
+                console.warn('⚠️ Error checking suggest result:', e);
+              }
+            }
+          }
+        }
+      }
+    } catch (error) {
+      console.warn('⚠️ Suggest API failed:', error);
+    }
+  }
+  
+  // Strategy 3: Try as product handle directly
+  if (!productHandle && /^[a-z0-9-]+$/i.test(identifier)) {
+    const testUrl = `/products/${identifier.toLowerCase()}?section_id=blog-product-card-section`;
+    console.log('🔍 Trying as handle:', testUrl);
+    try {
+      const testResponse = await fetch(testUrl, { method: 'HEAD' });
+      if (testResponse.ok) {
+        console.log('✅ Found as handle:', identifier);
+        productHandle = identifier.toLowerCase();
+      }
+    } catch (e) {
+      console.warn('⚠️ Handle test failed:', e);
+    }
+  }
+  
+  if (!productHandle) {
+    console.error('❌ Product not found:', identifier);
+    throw new Error(`Product "${identifier}" not found. Make sure the SKU is correct and the product is published.`);
+  }
+  
+  console.log('✅ Using product handle:', productHandle);
+  
+  // Fetch product card HTML
+  const productUrl = `/products/${productHandle}?section_id=blog-product-card-section`;
+  console.log('📥 Fetching product card from:', productUrl);
+  const response = await fetch(productUrl);
+  
+  if (!response.ok) {
+    console.error('❌ Failed to fetch product card:', response.status);
+    throw new Error(`Failed to fetch product: HTTP ${response.status}`);
+  }
+  
+  const html = await response.text();
+  console.log('📄 Response HTML length:', html.length);
+  
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, 'text/html');
+  
+  // Try multiple selectors to find the product card
+  let productCard = doc.querySelector('.blog-product-card') ||
+                    doc.querySelector('.blog-product-card-wrapper') ||
+                    doc.querySelector('[class*="product-card"]') ||
+                    doc.querySelector('main') ||
+                    doc.querySelector('.section') ||
+                    doc.body;
+  
+  if (productCard && productCard.querySelector('.blog-product-card')) {
+    productCard = productCard.querySelector('.blog-product-card');
+  }
+  
+  if (productCard && (productCard.classList.contains('blog-product-card') || productCard.querySelector('.blog-product-card'))) {
+    console.log('✅ Product card found, displaying...');
+    
+    // If we got a wrapper, extract the inner card
+    if (productCard.classList.contains('blog-product-card-wrapper')) {
+      const innerCard = productCard.querySelector('.blog-product-card');
+      if (innerCard) {
+        placeholder.replaceWith(innerCard.cloneNode(true));
+      } else {
+        placeholder.replaceWith(productCard.cloneNode(true));
+      }
+    } else {
+      placeholder.replaceWith(productCard.cloneNode(true));
+    }
+  } else {
+    console.error('❌ Product card element not found in response');
+    console.log('Available elements:', Array.from(doc.querySelectorAll('*')).map(el => el.className).filter(c => c));
+    
+    // Fallback: create a simple product card
+    try {
+      const productData = await fetch(`/products/${productHandle}.js`).then(r => r.json());
+      placeholder.innerHTML = `
+        <div class="blog-product-card">
+          <a href="${productData.url}" class="blog-product-card__link">
+            ${productData.featured_image ? `<div class="blog-product-card__image"><img src="${productData.featured_image}" alt="${productData.title}" width="120" height="120"></div>` : ''}
+            <div class="blog-product-card__content">
+              <h3 class="blog-product-card__title">${productData.title}</h3>
+              <div class="blog-product-card__price">${productData.price / 100} ${productData.currency}</div>
+            </div>
+          </a>
+        </div>
+      `;
+      console.log('✅ Created fallback product card');
+    } catch (e) {
+      throw new Error('Product card not found in response and fallback failed');
+    }
+  }
+}
+</script>
+
+
+    {%- if settings.favicon != blank -%}
+      <link
+        rel="icon"
+        type="image/png"
+        href="{{ settings.favicon | image_url: width: 32, height: 32 }}"
+      >
+    {%- endif -%}
+
+    {% comment %} This a way to wait for main content to load when navigating to a new page so that the view transitions can work consistently {% endcomment %}
+    <link
+      rel="expect"
+      href="#MainContent"
+      blocking="render"
+      id="view-transition-render-blocker"
+    >
+    <link
+      href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap"
+      rel="stylesheet"
+    >
+
+    {%- render 'meta-tags' -%}
+    {%- render 'stylesheets' -%}
+    {%- render 'fonts' -%}
+    {%- render 'scripts' -%}
+    {%- render 'theme-styles-variables' -%}
+    {%- render 'color-schemes' -%}
+    
+    {% if request.design_mode %}
+      {%- render 'theme-editor' -%}
+    {% endif %}
+    
+    {{ content_for_header }}
+    
+
+  </head>
+
+  <body class="page-width-{{ settings.page_width }} card-hover-effect-{{ settings.card_hover_effect }}">
+    {% render 'skip-to-content-link', href: '#MainContent', text: 'accessibility.skip_to_text' %}
+    <div id="header-group">
+      {% sections 'header-group' %}
+    </div>
+
+    <script
+      src="{{ 'critical.js' | asset_url }}"
+      type="module"
+      async
+      blocking="render"
+    ></script>
+
+    <main
+      id="MainContent"
+      class="content-for-layout"
+      role="main"
+      data-page-transition-enabled="{{ settings.page_transition_enabled }}"
+      data-product-transition="{{ settings.transition_to_main_product }}"
+      data-template="{{ template }}"
+    >
+      {{ content_for_layout }}
+    </main>
+
+    {% sections 'footer-group' %}
+
+    {% render 'search-modal' %}
+
+    {% if settings.quick_add or settings.mobile_quick_add %}
+      {% render 'quick-add-modal' %}
+    {% endif %}
+  </body>
+
+</html>

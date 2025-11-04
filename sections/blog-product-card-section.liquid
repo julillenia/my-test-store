@@ -1,0 +1,32 @@
+{%- comment -%}
+  Section to render product cards for blog posts
+  Called via AJAX: /products/{handle}?section_id=blog-product-card-section
+{%- endcomment -%}
+
+{% liquid
+  assign product_handle = request.path | split: '/products/' | last | split: '?' | first
+  
+  # Try to get product by handle
+  assign product = all_products[product_handle]
+  
+  # If not found, try searching
+  if product == blank
+    for product_item in collections.all.products
+      if product_item.handle == product_handle
+        assign product = product_item
+        break
+      endif
+    endfor
+  endif
+%}
+
+<div class="blog-product-card-wrapper">
+{% if product and product != blank %}
+  {% render 'blog-product-card', product: product %}
+{% else %}
+  <div class="blog-product-not-found">
+    <p>Produkt nicht gefunden: {{ product_handle }}</p>
+  </div>
+{% endif %}
+</div>
+
