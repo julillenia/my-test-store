@@ -6,6 +6,8 @@
   @param {object} [block] - The block object
 {%- enddoc -%}
 
+{% comment  %} This is blog page's add to cart button. {% endcomment %}
+
 {% liquid
   assign product_form_id = 'QuickAdd-ProductForm-' | append: product.id | append: '-' | append: block.id
   assign add_to_cart_text = 'actions.add' | t
