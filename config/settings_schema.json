@@ -1726,6 +1726,17 @@
         "limit": 4
       },
       {
+        "type": "richtext",
+        "id": "cart_drawer_text",
+        "label": "Cart Drawer Text",
+        "default": "<h3><span>Gute Wahl!</span>Deine Bestellung ist in 1-2 Werktagen bei Dir zu Hause.</h3>"
+      },
+      {
+        "type": "image_picker",
+        "id": "cart_drawer_icon",
+        "label": "Cart Drawer Icon",
+      },
+      {
         "type": "checkbox",
         "id": "auto_open_cart_drawer",
         "label": "t:settings.auto_open_cart_drawer",

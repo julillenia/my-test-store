@@ -7,7 +7,7 @@
   added.
   @param {string} [settings.drawer_color_scheme] - The color scheme for the drawer.
 {%- enddoc -%}
-{% comment  %} This is cart drawer. My main workspace {% endcomment %}
+{% comment %} This is cart drawer. My main workspace {% endcomment %}
 <script
   src="{{ 'cart-drawer.js' | asset_url }}"
   type="module"
@@ -97,15 +97,8 @@
           </div>
 
           <div class="cart-drawer__notification" id="cart-drawer-notification">
-            <svg class="check-icon" viewBox="0 0 33 33" fill="none" xmlns="http://www.w3.org/2000/svg">
-              <circle cx="16.5" cy="16.5" r="16.5" fill="white"/>
-              <path d="M8 16.8889L14.8276 23L26 13" stroke="#92B932" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-
-            <h3>
-              <span>Gute Wahl!</span>
-              Deine Bestellung ist in 1-2 Werktagen bei Dir zu Hause.
-            </h3>
+            {{ settings.cart_drawer_icon | image_url: width: 43 | image_tag: class: 'check-icon' }}
+            {{ settings.cart_drawer_text }}
           </div>
 
           <div class="cart-drawer__additionpay">
@@ -117,13 +110,12 @@
                 {% if percent > 100 %}
                   {% assign percent = 100 %}
                 {% endif %}
-                
               </div>
 
               <div class="progress-container">
                 <div class="progress-fill" style="width: {{ percent }}%;">
-                  <span 
-                    class="truck-icon" 
+                  <span
+                    class="truck-icon"
                     style="right: {% if percent <= 6 %}-14px{% else %}0{% endif %};"
                   >
                     🚚
@@ -149,13 +141,20 @@
 
               <div class="swiper">
                 <div class="bonus_products-list swiper-wrapper">
-                  {% for product in settings.bonus_products %}
+                  {% assign bonus_num = cart.items | size | minus: 1 %}
+                  {% assign related_product = cart.items[bonus_num].product.metafields.custom.related_product.value %}
+                  {% for bonus_product in related_product %}
                     <div class="bonus_products-list-part swiper-slide">
                       <div class="product-info">
-                        <img src="{{ product.featured_media | img_url: "master" }}" width="76px" height="96px">
-                        <p>{{ product.title | truncate: 20, '…' }}</p>
+                        <img
+                          src="{{ bonus_product.featured_media | img_url: 'master' }}"
+                          width="76"
+                          height="96"
+                          alt="{{ bonus_product.title }}"
+                        >
+                        <p>{{ bonus_product.title | truncate: 20, '…' }}</p>
                       </div>
-                      {% render 'add-to-bonus-button', id: product.id, product: product %}
+                      {% render 'add-to-bonus-button', id: bonus_product.id, product: bonus_product %}
                     </div>
                   {% endfor %}
                 </div>
@@ -176,6 +175,7 @@
 </cart-drawer-component>
 
 <script>
+  console.log('{{ product.metafields.custom.related_product.value }}');
   const swiper = new Swiper('.swiper', {
     slidesPerView: 1.23,
     spaceBetween: 11,
